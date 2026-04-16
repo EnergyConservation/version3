@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Shallow Well Survey App</title>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --bg:#f3f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--border:#d1d5db;
+      --accent:#2563eb;--accent2:#1d4ed8;--good:#15803d;--bad:#b91c1c;--warn:#b45309;
+      --shadow:0 8px 24px rgba(15,23,42,.08);--radius:16px;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+    body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0}
+    .wrap{max-width:1100px;margin:0 auto;padding:12px}
+    .card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+    h1,h2,h3{margin:0 0 8px 0;line-height:1.2}
+    h1{font-size:24px} h2{font-size:19px} h3{font-size:16px}
+    .sub,.small{color:var(--muted);font-size:13px;line-height:1.5}
+    .notice{padding:12px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:13px;line-height:1.4;margin-top:10px}
+    .warning{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+    .grid,.grid-3,.row{display:grid;gap:12px;grid-template-columns:1fr}
+    .field{display:flex;flex-direction:column;gap:6px}
+    label{font-size:14px;font-weight:700}
+    input,select,textarea{width:100%;min-height:48px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;font-size:16px;background:#fff;color:var(--text);appearance:none}
+    textarea{min-height:96px;resize:vertical}
+    input[readonly]{background:#f8fafc}
+    button{width:100%;min-height:50px;border:0;border-radius:12px;padding:12px 16px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+    button.secondary{background:#374151} button.ghost{background:#6b7280} button.success{background:var(--good)} button.warn{background:var(--warn)}
+    .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#eef2ff;color:#3730a3}
+    .result-grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .metric{border:1px solid var(--border);border-radius:14px;padding:14px;background:#fff}
+    .metric .name{font-size:13px;color:var(--muted);margin-bottom:6px}
+    .metric .value{font-size:22px;font-weight:700;word-break:break-word}
+    .status-good{color:var(--good)} .status-bad{color:var(--bad)}
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:#fff;margin-top:12px}
+    table{width:100%;min-width:980px;border-collapse:collapse;background:#fff}
+    th,td{border-bottom:1px solid var(--border);padding:10px;text-align:left;font-size:14px;vertical-align:top}
+    th{background:#eef2ff;position:sticky;top:0;z-index:1}
+    .photo-wrap img{width:100%;min-height:180px;max-height:320px;object-fit:contain;border:1px solid var(--border);border-radius:12px;background:#f8fafc}
+    .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .tab{padding:10px;border-radius:12px;border:1px solid var(--border);background:#fff;color:var(--text);font-weight:700;font-size:13px}
+    .tab.active{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
+    .tabpane{display:none}
+    .tabpane.active{display:block}
+    #mapFrame{width:100%;height:420px;border:1px solid var(--border);border-radius:12px}
+    .sticky-actions{position:sticky;bottom:0;z-index:10;background:rgba(243,247,251,.95);backdrop-filter:blur(6px);padding:8px 0 calc(8px + env(safe-area-inset-bottom)) 0}
+    .sticky-actions .inner{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+    .two-col{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width:700px){
+      .wrap{padding:18px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}.row{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .result-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.sticky-actions .inner{grid-template-columns:repeat(9,minmax(0,1fr))}
+      .two-col{grid-template-columns:1.3fr .7fr}
+    }
+    @media print{
+      body{background:#fff}.card{box-shadow:none;border:1px solid #ddd}.sticky-actions,.tabs,#installBtn,.notice:not(.printable),#photoBtn,#gpsBtn,#todayBtn,#syncNowBtn,#deleteAllBtn,#exportCsvBtn,#clearFormBtn,#jsonBtn{display:none !important}
+      .tabpane{display:block !important}
+      .wrap{max-width:none;padding:0}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Shallow Well Survey App</h1>
+    <div class="sub">Installable phone-friendly app with dashboard, printable report, offline save, improved XLSX export with photo-fit layout, Google Spreadsheet shortcut, manual Google Drive link, Google Sheets data sync, and XLSX upload to URL.</div>
+    <div class="pills">
+      <span class="pill">Installable</span><span class="pill">GPS</span><span class="pill">Camera</span><span class="pill">Dashboard</span><span class="pill">Map</span><span class="pill">Print</span><span class="pill">Sync Ready</span>
+    </div>
+    <div class="notice printable">Use the tabs below. Records save on this device. For online sync, paste your Google Apps Script Web App URL in Settings.</div>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" data-tab="form">Form</button>
+      <button class="tab" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="map">Map</button>
+      <button class="tab" data-tab="report">Report</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+  </div>
+
+  <div id="form" class="tabpane active">
+    <div class="card">
+      <h2>Interview and Well Information</h2>
+      <div class="grid">
+        <div class="field">
+          <label>1. District</label>
+          <select id="district">
+            <option value="">Select District</option>
+            <option>City Proper</option><option>Arevalo</option><option>Mandurriao</option>
+            <option>LaPaz</option><option>Jaro</option><option>Lapuz</option><option>Molo</option>
+          </select>
+        </div>
+        <div class="field"><label>2. Barangay</label><input id="barangay" type="text" /></div>
+        <div class="field"><label>3. Zone</label><input id="zone" type="text" /></div>
+        <div class="field"><label>4A. GPS Coordinate Latitude X</label><input id="latX" type="number" step="any" inputmode="decimal" /></div>
+        <div class="field"><label>4B. GPS Coordinate Latitude Y</label><input id="latY" type="number" step="any" inputmode="decimal" /></div>
+        <div class="field"><label>5. Name of the Interviewee</label><input id="interviewee" type="text" /></div>
+        <div class="field"><label>6. Date and Time of Interview</label><input id="interviewDateTime" type="datetime-local" /></div>
+        <div class="field"><label>7. Gina-usar sang Pamilya (Owned)</label><select id="usedByFamily"><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+        <div class="field"><label>8. Gina-usar sang pamilya kag pumuluyo</label><select id="usedByFamilyResidents"><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+        <div class="field"><label>9. Pila ka tawo ang naga-usar sang tubig sang bubon adlaw (Population)</label><input id="population" type="number" min="0" inputmode="numeric" /></div>
+        <div class="field"><label>10. Pila ka tabay ang bubon (1-10 or manual)</label><input id="wellDepth" type="number" min="0" step="0.01" inputmode="decimal" /></div>
+        <div class="field"><label>11. Pila ka tabay ang normal na level (1-10)</label><input id="normalLevel" type="number" min="0" step="0.01" inputmode="decimal" /></div>
+        <div class="field"><label>12. Pila ka tabay sa subong (1-10)</label><input id="currentLevel" type="number" min="0" step="0.01" inputmode="decimal" /></div>
+        <div class="field"><label>13. Other water source</label><select id="otherWaterSource"><option value="">Select</option><option>MIWD</option><option>Water refilling station</option><option>Delivery</option><option>Others</option></select></div>
+        <div class="field"><label>14. Sa diin gina usar ang tubig</label><input id="waterUse" type="text" placeholder="Manual input" /></div>
+        <div class="field"><label>21. Remarks</label><textarea id="remarks"></textarea></div>
+      </div>
+      <div class="row">
+        <button type="button" id="gpsBtn">Detect GPS Coordinate</button>
+        <button type="button" class="secondary" id="photoBtn">Take or Choose Photo</button>
+        <button type="button" class="ghost" id="todayBtn">Set Date and Time Now</button>
+      </div>
+      <input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none" />
+      <div class="two-col" style="margin-top:14px">
+        <div class="field">
+          <label>Photo File Name</label>
+          <input id="photoName" type="text" readonly />
+        </div>
+        <div class="photo-wrap">
+          <label>Photo Preview</label>
+          <img id="photoPreview" alt="No photo selected" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Automatic Computation</h2>
+      <div class="result-grid">
+        <div class="metric"><div class="name">15. Volume per Shallow Well</div><div class="value" id="volumePerWell">0 L</div></div>
+        <div class="metric"><div class="name">16. Total Daily Water Need</div><div class="value" id="dailyNeed">0 L</div></div>
+        <div class="metric"><div class="name">17. Current Supply of Shallow Wells</div><div class="value" id="currentSupply">0 L</div></div>
+        <div class="metric"><div class="name">18. Available Water Supply</div><div class="value" id="availableSupply">0 L</div></div>
+        <div class="metric"><div class="name">19. Status of Water Sufficiency</div><div class="value" id="status">Sufficient</div></div>
+        <div class="metric"><div class="name">20. Individuals Affected</div><div class="value" id="affected">0</div></div>
+      </div>
+      <p class="small">Volume = Normal Level × 200. Daily Need = Population × 30. Current Supply = Current Level × 200. Available Supply = Current Supply − Daily Need.</p>
+    </div>
+
+    <div class="card" id="savedRecordsCard">
+      <h2>Saved Records</h2>
+      <div class="small" id="recordCountText">No saved records yet.</div>
+      <div class="small" id="storageStatusText">Records save in this browser on this device.</div>
+      <div class="table-wrap">
+        <table id="recordsTable">
+          <thead>
+            <tr>
+              <th>District</th><th>Barangay</th><th>Zone</th><th>Interviewee</th><th>Date/Time</th><th>Population</th><th>Normal Level</th><th>Current Level</th><th>Daily Need</th><th>Current Supply</th><th>Available Supply</th><th>Status</th><th>Affected</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard" class="tabpane">
+    <div class="card">
+      <h2>Dashboard Summary</h2>
+      <div class="result-grid">
+        <div class="metric"><div class="name">Total Records</div><div class="value" id="dashRecords">0</div></div>
+        <div class="metric"><div class="name">Total Population</div><div class="value" id="dashPopulation">0</div></div>
+        <div class="metric"><div class="name">Individuals Affected</div><div class="value" id="dashAffected">0</div></div>
+        <div class="metric"><div class="name">Sufficient Wells</div><div class="value" id="dashSufficient">0</div></div>
+        <div class="metric"><div class="name">Insufficient Wells</div><div class="value" id="dashInsufficient">0</div></div>
+        <div class="metric"><div class="name">Total Available Supply</div><div class="value" id="dashSupply">0 L</div></div>
+      </div>
+      <div class="table-wrap">
+        <table id="districtSummaryTable">
+          <thead><tr><th>District</th><th>Records</th><th>Population</th><th>Affected</th><th>Insufficient</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="map" class="tabpane">
+    <div class="card">
+      <h2>Map View</h2>
+      <div class="small">This uses OpenStreetMap through a generated embed. Records without GPS coordinates are skipped.</div>
+      <iframe id="mapFrame" title="Map View"></iframe>
+    </div>
+  </div>
+
+  <div id="report" class="tabpane">
+    <div class="card">
+      <h2>Printable Report</h2>
+      <div class="row">
+        <button id="printBtn">Print Report</button>
+        <button class="secondary" id="jsonBtn">Backup JSON</button>
+        <button class="secondary" id="exportCsvBtn">Export CSV</button>
+        <button class="secondary" id="exportXlsxBtn">Export XLSX</button>
+      </div>
+      <div id="reportContent" style="margin-top:14px"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="tabpane">
+    <div class="card">
+      <h2>Settings and Online Sync</h2>
+      <div class="grid">
+        <div class="field">
+          <label>Google Sheets Sync URL</label>
+          <input id="syncUrl" type="url" placeholder="Paste your deployed Google Apps Script web app URL" />
+        </div>
+        <div class="field">
+          <label>Google Drive Manual Link</label>
+          <input id="driveManualUrl" type="url" placeholder="Paste your Google Drive folder or upload link here" />
+        </div>
+        <div class="field">
+          <label>Spreadsheet Upload URL</label>
+          <input id="spreadsheetUploadUrl" type="url" placeholder="Paste the URL that will receive the exported XLSX file" />
+        </div>
+        <div class="field">
+          <label>Sync Notes</label>
+          <textarea readonly>To enable online sync to Google Sheets:
+1. Create a Google Sheet.
+2. Create a Google Apps Script attached to that sheet.
+3. Deploy it as a Web App that accepts POST requests.
+4. Paste the Web App URL in Google Sheets Sync URL.
+5. Use Sync Now to upload all saved records as data to Google Sheets.
+6. Use Export XLSX to download a formatted workbook.
+7. Use Open Google Spreadsheet to create a new Google Sheet, then upload the exported file.
+8. Paste a Spreadsheet Upload URL if you want the app to send the XLSX file directly to your own upload endpoint.</textarea>
+        </div>
+        <div class="field">
+          <label>Manual Google Drive Notes</label>
+          <textarea readonly>Paste your Google Drive folder link or manual upload link here.
+Use the Open Drive Link button to open that link from the app for manual upload of the exported spreadsheet or photos. Use Open Google Spreadsheet to open a new Google Sheet. Use Send XLSX to URL to upload the exported spreadsheet file to your own receiving URL.</textarea>
+        </div>
+
+      </div>
+      <div class="row">
+        <button id="syncNowBtn">Sync Now</button>
+                <button class="ghost" id="installBtn">Install App</button>
+        <button class="warn" id="deleteAllBtn">Delete All Records</button>
+      </div>
+      <div id="syncStatus" class="notice warning">No sync URL saved yet.</div>
+    </div>
+  </div>
+
+  <div class="sticky-actions">
+    <div class="wrap" style="padding-top:0;padding-bottom:0">
+      <div class="inner">
+        <button class="success" id="addBtn">Add Record</button>
+        <button class="secondary" id="clearFormBtn">Clear Form</button>
+        <button class="secondary" id="exportCsvBtn2">Export CSV</button>
+        <button class="secondary" id="exportXlsxBtn2">Export XLSX</button>
+        <button class="ghost" id="goDashboardBtn">Dashboard</button>
+        <button class="ghost" id="goReportBtn">Report</button>
+              </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ids=['district','barangay','zone','latX','latY','interviewee','interviewDateTime','usedByFamily','usedByFamilyResidents','population','wellDepth','normalLevel','currentLevel','otherWaterSource','waterUse','remarks'];
+const STORAGE_KEY='shallow_well_records_full_v1';
+const SETTINGS_KEY='shallow_well_settings_full_v1';
+let currentPhotoData=''; let records=[]; let deferredPrompt=null;
+
+ids.forEach(id=>{const el=document.getElementById(id); el.addEventListener('input',calculate); el.addEventListener('change',calculate);});
+
+function num(id){const v=parseFloat(document.getElementById(id).value); return Number.isFinite(v)?v:0;}
+function text(id){return document.getElementById(id).value||'';}
+function formatLiters(n){return `${n.toLocaleString(undefined,{maximumFractionDigits:2})} L`;}
+function escapeHtml(str){return String(str??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+
+function calculate(){
+  const population=num('population'), normalLevel=num('normalLevel'), currentLevel=num('currentLevel');
+  const volumePerWell=normalLevel*200, dailyNeed=population*30, currentSupply=currentLevel*200, availableSupply=currentSupply-dailyNeed;
+  const status=availableSupply>=0?'Sufficient':'Insufficient', affected=status==='Insufficient'?population:0;
+  document.getElementById('volumePerWell').textContent=formatLiters(volumePerWell);
+  document.getElementById('dailyNeed').textContent=formatLiters(dailyNeed);
+  document.getElementById('currentSupply').textContent=formatLiters(currentSupply);
+  document.getElementById('availableSupply').textContent=formatLiters(availableSupply);
+  const s=document.getElementById('status'); s.textContent=status; s.className=status==='Sufficient'?'value status-good':'value status-bad';
+  document.getElementById('affected').textContent=affected.toLocaleString();
+  return {volumePerWell,dailyNeed,currentSupply,availableSupply,status,affected};
+}
+
+function currentRecord(){
+  const c=calculate();
+  return {
+    district:text('district'), barangay:text('barangay'), zone:text('zone'),
+    latX:text('latX'), latY:text('latY'),
+    interviewee:text('interviewee'), interviewDateTime:text('interviewDateTime'),
+    usedByFamily:text('usedByFamily'), usedByFamilyResidents:text('usedByFamilyResidents'),
+    population:num('population'), wellDepth:num('wellDepth'), normalLevel:num('normalLevel'), currentLevel:num('currentLevel'),
+    otherWaterSource:text('otherWaterSource'), waterUse:text('waterUse'), remarks:text('remarks'),
+    photoName:text('photoName'), photoData:currentPhotoData,
+    volumePerWell:c.volumePerWell, dailyNeed:c.dailyNeed, currentSupply:c.currentSupply,
+    availableSupply:c.availableSupply, status:c.status, affected:c.affected
+  };
+}
+
+function saveRecords(){
+  let saved = false;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    saved = true;
+  }catch(e){
+    try{
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+      saved = true;
+      console.warn('Local storage unavailable, using session storage instead.', e);
+    }catch(e2){
+      console.warn('Unable to save records in browser storage.', e2);
+    }
+  }
+  refreshViews();
+  return saved;
+}
+
+function loadRecords(){
+  try{
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw){
+      raw = sessionStorage.getItem(STORAGE_KEY);
+    }
+    if(raw){
+      const p = JSON.parse(raw);
+      if(Array.isArray(p)) records = p;
+    }
+  }catch(e){
+    console.warn('Could not load saved records.', e);
+    records = [];
+  }
+  refreshViews();
+}
+
+function saveSettings(){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    syncUrl:text('syncUrl'),
+    driveManualUrl:text('driveManualUrl'),
+    spreadsheetUploadUrl:text('spreadsheetUploadUrl')
+  }));
+  updateSyncStatus();
+}
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}');
+    document.getElementById('syncUrl').value=s.syncUrl||'';
+    document.getElementById('driveManualUrl').value=s.driveManualUrl||'';
+    document.getElementById('spreadsheetUploadUrl').value=s.spreadsheetUploadUrl||'';
+  }catch(e){}
+  updateSyncStatus();
+}
+function updateSyncStatus(){
+  const el=document.getElementById('syncStatus');
+  const syncUrl=text('syncUrl');
+  const driveManualUrl=text('driveManualUrl');
+  const spreadsheetUploadUrl=text('spreadsheetUploadUrl');
+  const parts=[];
+  if(syncUrl) parts.push('Google Sheets sync URL saved');
+  if(driveManualUrl) parts.push('Google Drive manual link saved');
+  if(spreadsheetUploadUrl) parts.push('Spreadsheet upload URL saved');
+  if(parts.length){
+    el.textContent=parts.join(' · ') + '.';
+    el.className='notice';
+  }else{
+    el.textContent='No sync URL, Google Drive link, or spreadsheet upload URL saved yet.';
+    el.className='notice warning';
+  }
+}
+
+function addRecord(){
+  const record=currentRecord();
+  records.push(record);
+  const saved = saveRecords();
+  clearForm();
+  showTab('form');
+
+  const card = document.getElementById('savedRecordsCard');
+  if(card){
+    card.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  if(saved){
+    alert('Record added successfully and saved to Saved Records.');
+  }else{
+    alert('Record added, but your browser could not save it permanently. Try using normal browser mode instead of private/incognito mode.');
+  }
+}
+
+function renderTable(){
+  const tbody=document.querySelector('#recordsTable tbody');
+  const countText=document.getElementById('recordCountText');
+  const storageStatusText=document.getElementById('storageStatusText');
+  tbody.innerHTML='';
+
+  let storageMessage='Records save in this browser on this device.';
+  try{
+    localStorage.setItem('__storage_test__','1');
+    localStorage.removeItem('__storage_test__');
+  }catch(e){
+    storageMessage='Permanent browser storage may be blocked. Try normal browser mode instead of private/incognito mode.';
+  }
+  if(storageStatusText) storageStatusText.textContent=storageMessage;
+
+  if(!records.length){
+    countText.textContent='No saved records yet.';
+    return;
+  }
+  countText.textContent=`Saved records: ${records.length}`;
+  records.forEach((r,index)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${escapeHtml(r.district)}</td><td>${escapeHtml(r.barangay)}</td><td>${escapeHtml(r.zone)}</td><td>${escapeHtml(r.interviewee)}</td><td>${escapeHtml(r.interviewDateTime)}</td><td>${r.population}</td><td>${r.normalLevel}</td><td>${r.currentLevel}</td><td>${r.dailyNeed}</td><td>${r.currentSupply}</td><td>${r.availableSupply}</td><td>${escapeHtml(r.status)}</td><td>${r.affected}</td><td><button type="button" class="warn" onclick="deleteRecord(${index})">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function refreshDashboard(){
+  const totalRecords=records.length;
+  const totalPopulation=records.reduce((a,r)=>a+(+r.population||0),0);
+  const totalAffected=records.reduce((a,r)=>a+(+r.affected||0),0);
+  const sufficient=records.filter(r=>r.status==='Sufficient').length;
+  const insufficient=records.filter(r=>r.status==='Insufficient').length;
+  const totalAvailable=records.reduce((a,r)=>a+(+r.availableSupply||0),0);
+  document.getElementById('dashRecords').textContent=totalRecords.toLocaleString();
+  document.getElementById('dashPopulation').textContent=totalPopulation.toLocaleString();
+  document.getElementById('dashAffected').textContent=totalAffected.toLocaleString();
+  document.getElementById('dashSufficient').textContent=sufficient.toLocaleString();
+  document.getElementById('dashInsufficient').textContent=insufficient.toLocaleString();
+  document.getElementById('dashSupply').textContent=formatLiters(totalAvailable);
+
+  const byDistrict={};
+  records.forEach(r=>{
+    const d=r.district||'Unspecified';
+    if(!byDistrict[d]) byDistrict[d]={records:0,population:0,affected:0,insufficient:0};
+    byDistrict[d].records++;
+    byDistrict[d].population += (+r.population||0);
+    byDistrict[d].affected += (+r.affected||0);
+    byDistrict[d].insufficient += (r.status==='Insufficient'?1:0);
+  });
+  const tbody=document.querySelector('#districtSummaryTable tbody'); tbody.innerHTML='';
+  Object.entries(byDistrict).forEach(([d,v])=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${escapeHtml(d)}</td><td>${v.records}</td><td>${v.population}</td><td>${v.affected}</td><td>${v.insufficient}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function refreshMap(){
+  const pts=records.filter(r=>r.latX && r.latY);
+  const map=document.getElementById('mapFrame');
+  if(!pts.length){ map.srcdoc='<p style="font-family:Arial;padding:20px">No GPS coordinates saved yet.</p>'; return; }
+  const lats=pts.map(r=>parseFloat(r.latX)).filter(Number.isFinite), lons=pts.map(r=>parseFloat(r.latY)).filter(Number.isFinite);
+  if(!lats.length||!lons.length){ map.srcdoc='<p style="font-family:Arial;padding:20px">Invalid GPS data.</p>'; return; }
+  const minLat=Math.min(...lats)-0.01, maxLat=Math.max(...lats)+0.01, minLon=Math.min(...lons)-0.01, maxLon=Math.max(...lons)+0.01;
+  const markers=pts.map(r=>`marker=${encodeURIComponent(r.latX)},${encodeURIComponent(r.latY)}`).join('&');
+  map.src=`https://www.openstreetmap.org/export/embed.html?bbox=${minLon}%2C${minLat}%2C${maxLon}%2C${maxLat}&layer=mapnik&${markers}`;
+}
+
+function refreshReport(){
+  const c=document.getElementById('reportContent');
+  if(!records.length){ c.innerHTML='<div class="notice warning">No records yet.</div>'; return; }
+  const summary=`<div class="result-grid">
+    <div class="metric"><div class="name">Total Records</div><div class="value">${records.length}</div></div>
+    <div class="metric"><div class="name">Total Population</div><div class="value">${records.reduce((a,r)=>a+(+r.population||0),0)}</div></div>
+    <div class="metric"><div class="name">Individuals Affected</div><div class="value">${records.reduce((a,r)=>a+(+r.affected||0),0)}</div></div>
+  </div>`;
+  const rows=records.map((r,i)=>`<tr>
+    <td>${i+1}</td><td>${escapeHtml(r.district)}</td><td>${escapeHtml(r.barangay)}</td><td>${escapeHtml(r.zone)}</td>
+    <td>${escapeHtml(r.interviewee)}</td><td>${escapeHtml(r.interviewDateTime)}</td><td>${r.population}</td>
+    <td>${r.normalLevel}</td><td>${r.currentLevel}</td><td>${r.currentSupply}</td><td>${r.dailyNeed}</td>
+    <td>${r.availableSupply}</td><td>${escapeHtml(r.status)}</td><td>${r.affected}</td><td>${escapeHtml(r.remarks)}</td></tr>`).join('');
+  c.innerHTML=summary + `<div class="table-wrap"><table><thead><tr><th>#</th><th>District</th><th>Barangay</th><th>Zone</th><th>Interviewee</th><th>Date/Time</th><th>Population</th><th>Normal</th><th>Current</th><th>Current Supply</th><th>Daily Need</th><th>Available</th><th>Status</th><th>Affected</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function refreshViews(){ renderTable(); refreshDashboard(); refreshMap(); refreshReport(); }
+
+function exportCSV(){
+  if(!records.length){ alert('No records to export yet.'); return; }
+  const headers=['District','Barangay','Zone','Latitude X','Latitude Y','Name of Interviewee','Date and Time of Interview','Gina-usar sang Pamilya (Owned)','Gina-usar sang pamilya kag pumuluyo','Population','Well Depth','Normal Level','Current Level','Other Water Source','Sa diin gina usar ang tubig','Remarks','Photo File Name','Photo Data','Volume per Shallow Well','Total Daily Water Need','Current Supply of Shallow Wells','Available Water Supply','Status of Water Sufficiency','Individuals Affected'];
+  const rows=records.map(r=>[r.district,r.barangay,r.zone,r.latX,r.latY,r.interviewee,r.interviewDateTime,r.usedByFamily,r.usedByFamilyResidents,r.population,r.wellDepth,r.normalLevel,r.currentLevel,r.otherWaterSource,r.waterUse,r.remarks,r.photoName,r.volumePerWell,r.dailyNeed,r.currentSupply,r.availableSupply,r.status,r.affected]);
+  downloadFile('shallow_well_records_full.csv',[headers,...rows].map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv;charset=utf-8;');
+}
+async function exportXLSX(){
+  if(!records.length){
+    alert('No records to export yet.');
+    return;
+  }
+  if(typeof ExcelJS === 'undefined' || typeof saveAs === 'undefined'){
+    alert('Excel export libraries failed to load. Please connect to the internet once and try again.');
+    return;
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'ChatGPT';
+  workbook.created = new Date();
+
+  const titleFill = {type:'pattern', pattern:'solid', fgColor:{argb:'1D4ED8'}};
+  const sectionFill = {type:'pattern', pattern:'solid', fgColor:{argb:'DBEAFE'}};
+  const headerFill = {type:'pattern', pattern:'solid', fgColor:{argb:'E0E7FF'}};
+  const lightFill = {type:'pattern', pattern:'solid', fgColor:{argb:'F8FAFC'}};
+  const borderThin = {
+    top:{style:'thin', color:{argb:'CBD5E1'}},
+    left:{style:'thin', color:{argb:'CBD5E1'}},
+    bottom:{style:'thin', color:{argb:'CBD5E1'}},
+    right:{style:'thin', color:{argb:'CBD5E1'}}
+  };
+
+  const latest = records[records.length - 1] || {};
+
+  const ws = workbook.addWorksheet('Survey Form', {views:[{showGridLines:false}]});
+  ws.columns = [{width:22},{width:22},{width:14},{width:14},{width:22},{width:22}];
+  ws.mergeCells('A1:F1');
+  ws.getCell('A1').value = 'SHALLOW WELL SURVEY FORM';
+  ws.getCell('A1').font = {bold:true, size:16, color:{argb:'FFFFFF'}};
+  ws.getCell('A1').fill = titleFill;
+  ws.getCell('A1').alignment = {vertical:'middle', horizontal:'center'};
+  ws.getRow(1).height = 28;
+
+  const rows = [
+    ['District', latest.district || '', '', '', 'Photo File Name', latest.photoName || 'No photo'],
+    ['Barangay', latest.barangay || '', '', '', 'Interviewee', latest.interviewee || ''],
+    ['Zone', latest.zone || '', '', '', 'Date/Time', latest.interviewDateTime || ''],
+    ['Latitude X', latest.latX || '', '', '', 'Latitude Y', latest.latY || ''],
+    ['Owned', latest.usedByFamily || '', '', '', 'Family + Residents', latest.usedByFamilyResidents || ''],
+    ['Population', latest.population || 0, '', '', 'Well Depth', latest.wellDepth || 0],
+    ['Normal Level', latest.normalLevel || 0, '', '', 'Current Level', latest.currentLevel || 0],
+    ['Other Water Source', latest.otherWaterSource || '', '', '', 'Water Use', latest.waterUse || ''],
+    ['Remarks', latest.remarks || ''],
+    ['Computed Results'],
+    ['Volume per Shallow Well', latest.volumePerWell || 0],
+    ['Total Daily Water Need', latest.dailyNeed || 0],
+    ['Current Supply of Shallow Wells', latest.currentSupply || 0],
+    ['Available Water Supply', latest.availableSupply || 0],
+    ['Status of Water Sufficiency', latest.status || ''],
+    ['Individuals Affected', latest.affected || 0],
+    ['Photo Area']
+  ];
+
+  let baseRow = 3;
+  rows.forEach((arr, i) => {
+    const rowNo = baseRow + i;
+    arr.forEach((val, j) => ws.getCell(rowNo, j + 1).value = val);
+  });
+
+  ws.mergeCells('B11:F11');
+  ws.mergeCells('A12:F12');
+  ws.mergeCells('A19:F19');
+  ws.mergeCells('A20:F27');
+
+  for(let r = 3; r <= 18; r++){
+    ws.getRow(r).height = r === 11 ? 44 : 24;
+    ['A','E'].forEach(col => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.font = {bold:true, color:{argb:'374151'}};
+      cell.fill = headerFill;
+      cell.border = borderThin;
+      cell.alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    });
+    ['B','F'].forEach(col => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.border = borderThin;
+      cell.alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    });
+  }
+
+  ws.getCell('A12').font = {bold:true, color:{argb:'1E3A8A'}};
+  ws.getCell('A12').fill = sectionFill;
+  ws.getCell('A12').alignment = {vertical:'middle', horizontal:'center'};
+  ws.getRow(12).height = 24;
+
+  for(let r = 13; r <= 18; r++){
+    ws.getCell(`A${r}`).font = {bold:true};
+    ws.getCell(`A${r}`).fill = headerFill;
+    ws.getCell(`A${r}`).border = borderThin;
+    ws.getCell(`B${r}`).border = borderThin;
+    ws.getCell(`A${r}`).alignment = {vertical:'middle', horizontal:'left'};
+    ws.getCell(`B${r}`).alignment = {vertical:'middle', horizontal:'left'};
+    ws.getRow(r).height = 24;
+  }
+
+  ws.getCell('A19').font = {bold:true, color:{argb:'1E3A8A'}};
+  ws.getCell('A19').fill = sectionFill;
+  ws.getCell('A19').alignment = {vertical:'middle', horizontal:'center'};
+  ws.getRow(19).height = 24;
+
+  for(let r = 20; r <= 27; r++){
+    ws.getRow(r).height = 28;
+    for(let c = 1; c <= 6; c++){
+      ws.getCell(r, c).border = borderThin;
+      ws.getCell(r, c).fill = lightFill;
+    }
+  }
+  ws.getCell('A20').value = 'Photo will be placed here';
+  ws.getCell('A20').alignment = {vertical:'middle', horizontal:'center'};
+  ws.getCell('A20').font = {italic:true, color:{argb:'6B7280'}};
+
+  if(latest.photoData && typeof latest.photoData === 'string' && latest.photoData.startsWith('data:image/')){
+    try{
+      const match = latest.photoData.match(/^data:image\/(\w+);base64,(.+)$/);
+      if(match){
+        const ext = match[1] === 'jpg' ? 'jpeg' : match[1];
+        const imageId = workbook.addImage({base64: match[2], extension: ext});
+        ws.addImage(imageId, {tl:{col:0.25,row:19.25}, br:{col:5.75,row:26.75}, editAs:'oneCell'});
+        ws.getCell('A20').value = '';
+      }
+    }catch(e){
+      console.warn('Could not embed latest photo', e);
+    }
+  }
+
+  const dataWs = workbook.addWorksheet('Records', {views:[{state:'frozen', ySplit:4, showGridLines:false}]});
+  dataWs.columns = [
+    {header:'District', key:'district', width:14},
+    {header:'Barangay', key:'barangay', width:16},
+    {header:'Zone', key:'zone', width:10},
+    {header:'Latitude X', key:'latX', width:12},
+    {header:'Latitude Y', key:'latY', width:12},
+    {header:'Interviewee', key:'interviewee', width:20},
+    {header:'Date/Time', key:'interviewDateTime', width:20},
+    {header:'Owned', key:'usedByFamily', width:10},
+    {header:'Family + Residents', key:'usedByFamilyResidents', width:18},
+    {header:'Population', key:'population', width:10},
+    {header:'Well Depth', key:'wellDepth', width:10},
+    {header:'Normal Level', key:'normalLevel', width:12},
+    {header:'Current Level', key:'currentLevel', width:12},
+    {header:'Other Water Source', key:'otherWaterSource', width:18},
+    {header:'Water Use', key:'waterUse', width:22},
+    {header:'Remarks', key:'remarks', width:26},
+    {header:'Photo File Name', key:'photoName', width:22},
+    {header:'Photo', key:'photoDisplay', width:20},
+    {header:'Photo Data', key:'photoData', width:30},
+    {header:'Volume per Well', key:'volumePerWell', width:16},
+    {header:'Daily Need', key:'dailyNeed', width:16},
+    {header:'Current Supply', key:'currentSupply', width:16},
+    {header:'Available Supply', key:'availableSupply', width:18},
+    {header:'Status', key:'status', width:14},
+    {header:'Affected', key:'affected', width:12}
+  ];
+
+  dataWs.mergeCells('A1:Y1');
+  dataWs.getCell('A1').value = 'SHALLOW WELL SURVEY RECORDS';
+  dataWs.getCell('A1').font = {bold:true, size:16, color:{argb:'FFFFFF'}};
+  dataWs.getCell('A1').fill = titleFill;
+  dataWs.getCell('A1').alignment = {vertical:'middle', horizontal:'center'};
+  dataWs.getRow(1).height = 28;
+
+  dataWs.mergeCells('A2:Y2');
+  dataWs.getCell('A2').value = 'Exported from standalone survey app';
+  dataWs.getCell('A2').font = {italic:true, color:{argb:'475569'}};
+  dataWs.getCell('A2').alignment = {horizontal:'center'};
+  dataWs.getRow(2).height = 20;
+
+  const headerRow = dataWs.getRow(4);
+  dataWs.columns.forEach((col, idx) => {
+    const cell = headerRow.getCell(idx + 1);
+    cell.value = col.header;
+    cell.font = {bold:true, color:{argb:'1E3A8A'}};
+    cell.fill = headerFill;
+    cell.border = borderThin;
+    cell.alignment = {vertical:'middle', horizontal:'center', wrapText:true};
+  });
+  headerRow.height = 32;
+
+  records.forEach((rec) => {
+    const row = dataWs.addRow({
+      ...rec,
+      photoDisplay: rec.photoData ? 'Embedded' : '',
+      photoData: rec.photoData ? '[image data included]' : ''
+    });
+    row.height = rec.photoData ? 78 : 30;
+    row.eachCell((cell) => {
+      cell.border = borderThin;
+      cell.alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    });
+
+    if(rec.photoData && typeof rec.photoData === 'string' && rec.photoData.startsWith('data:image/')){
+      try{
+        const match = rec.photoData.match(/^data:image\/(\w+);base64,(.+)$/);
+        if(match){
+          const ext = match[1] === 'jpg' ? 'jpeg' : match[1];
+          const imageId = workbook.addImage({base64: match[2], extension: ext});
+          const r = row.number;
+          dataWs.addImage(imageId, {tl:{col:17.1,row:r-0.85}, br:{col:17.9,row:r-0.05}, editAs:'oneCell'});
+          dataWs.getCell(`R${r}`).value = '';
+        }
+      }catch(e){
+        console.warn('Could not embed row photo', e);
+      }
+    }
+  });
+
+  const notesWs = workbook.addWorksheet('Photo Notes', {views:[{showGridLines:false}]});
+  notesWs.columns = [{width:24},{width:90}];
+  notesWs.mergeCells('A1:B1');
+  notesWs.getCell('A1').value = 'PHOTO NOTES';
+  notesWs.getCell('A1').font = {bold:true, size:14, color:{argb:'FFFFFF'}};
+  notesWs.getCell('A1').fill = titleFill;
+  notesWs.getCell('A1').alignment = {horizontal:'center'};
+  notesWs.addRow(['About', 'The XLSX export includes the latest form photo on the Survey Form sheet and attempts to place thumbnails in the Records sheet.']);
+  notesWs.addRow(['CSV limitation', 'CSV cannot embed real images, so it includes Photo File Name and Photo Data text only.']);
+  notesWs.addRow(['Latest Photo File Name', latest.photoName || 'None']);
+  for(let r = 2; r <= 4; r++){
+    notesWs.getCell(`A${r}`).font = {bold:true};
+    notesWs.getCell(`A${r}`).fill = headerFill;
+    notesWs.getCell(`A${r}`).border = borderThin;
+    notesWs.getCell(`B${r}`).border = borderThin;
+    notesWs.getCell(`A${r}`).alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    notesWs.getCell(`B${r}`).alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+    notesWs.getRow(r).height = 34;
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  saveAs(new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }), 'shallow_well_records_best_design.xlsx');
+}
+
+function exportJSON(){ downloadFile('shallow_well_records_full_backup.json',JSON.stringify(records,null,2),'application/json;charset=utf-8;'); }
+function downloadFile(filename,content,type){ const blob=new Blob([content],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); }
+
+function clearForm(){
+  ids.forEach(id=>document.getElementById(id).value='');
+  document.getElementById('photoInput').value='';
+  document.getElementById('photoName').value='';
+  document.getElementById('photoPreview').removeAttribute('src');
+  currentPhotoData='';
+  const now=new Date(), tzOffset=now.getTimezoneOffset();
+  const local=new Date(now.getTime()-tzOffset*60000).toISOString().slice(0,16);
+  document.getElementById('interviewDateTime').value=local;
+  calculate();
+  document.getElementById('district').focus();
+}
+function deleteRecord(index){
+  if(!confirm('Delete this saved record?')) return;
+  records.splice(index,1);
+  saveRecords();
+}
+
+function clearRecords(){
+  if(!confirm('Delete all saved records on this device?')) return;
+  records=[];
+  saveRecords();
+}
+
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.toggle('active', p.id===name));
+  if(name==='map') refreshMap();
+  if(name==='report') refreshReport();
+}
+document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>showTab(btn.dataset.tab)));
+document.getElementById('goDashboardBtn').addEventListener('click',()=>showTab('dashboard'));
+document.getElementById('goReportBtn').addEventListener('click',()=>showTab('report'));
+
+document.getElementById('todayBtn').addEventListener('click',()=>{
+  const now=new Date(), tzOffset=now.getTimezoneOffset();
+  const local=new Date(now.getTime()-tzOffset*60000).toISOString().slice(0,16);
+  document.getElementById('interviewDateTime').value=local;
+});
+document.getElementById('gpsBtn').addEventListener('click',()=>{
+  if(!navigator.geolocation){ alert('Geolocation is not supported on this device/browser.'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('latX').value=pos.coords.latitude.toFixed(6);
+    document.getElementById('latY').value=pos.coords.longitude.toFixed(6);
+  },()=>alert('Unable to detect GPS coordinate. Please allow location access.'),{enableHighAccuracy:true, timeout:12000, maximumAge:0});
+});
+document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoInput').click());
+document.getElementById('photoInput').addEventListener('change',e=>{
+  const file=e.target.files && e.target.files[0]; if(!file) return;
+  document.getElementById('photoName').value=file.name;
+  const reader=new FileReader();
+  reader.onload=ev=>{ currentPhotoData=ev.target.result||''; document.getElementById('photoPreview').src=currentPhotoData; };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('addBtn').addEventListener('click',addRecord);
+document.getElementById('clearFormBtn').addEventListener('click',clearForm);
+document.getElementById('exportCsvBtn').addEventListener('click',exportCSV);
+document.getElementById('exportCsvBtn2').addEventListener('click',exportCSV);
+document.getElementById('exportXlsxBtn').addEventListener('click',exportXLSX);
+document.getElementById('exportXlsxBtn2').addEventListener('click',exportXLSX);
+document.getElementById('jsonBtn').addEventListener('click',exportJSON);
+document.getElementById('printBtn').addEventListener('click',()=>window.print());
+document.getElementById('deleteAllBtn').addEventListener('click',clearRecords);
+document.getElementById('syncUrl').addEventListener('change',saveSettings);
+document.getElementById('driveManualUrl').addEventListener('change',saveSettings);
+document.getElementById('spreadsheetUploadUrl').addEventListener('change',saveSettings);
+document.getElementById('openGoogleSheetBtn').addEventListener('click',()=>{
+  window.open('https://sheets.new','_blank');
+});
+document.getElementById('openGoogleSheetBtn2').addEventListener('click',()=>{
+  window.open('https://sheets.new','_blank');
+});
+document.getElementById('sendXlsxUrlBtn').addEventListener('click',sendXLSXToURL);
+document.getElementById('sendXlsxUrlBtn2').addEventListener('click',sendXLSXToURL);
+document.getElementById('openDriveLinkBtn').addEventListener('click',()=>{
+  const url=text('driveManualUrl');
+  if(!url){ alert('Please paste your Google Drive manual link first.'); return; }
+  window.open(url,'_blank');
+});
+document.getElementById('openDriveLinkBtn2').addEventListener('click',()=>{
+  const url=text('driveManualUrl');
+  if(!url){ alert('Please paste your Google Drive manual link first.'); return; }
+  window.open(url,'_blank');
+});
+
+document.getElementById('syncNowBtn').addEventListener('click', async ()=>{
+  const url=text('syncUrl');
+  if(!url){ alert('Please paste your Google Apps Script Web App URL first.'); return; }
+  if(!records.length){ alert('No records to sync.'); return; }
+  const status=document.getElementById('syncStatus');
+  status.textContent='Syncing...';
+  try{
+    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({records})});
+    const out=await res.text();
+    status.textContent=res.ok?`Sync complete. Server response: ${out}`:`Sync failed. Server response: ${out}`;
+    status.className='notice' + (res.ok?'':' warning');
+  }catch(err){
+    status.textContent='Sync failed. Check your Apps Script URL, deployment access, and internet connection.';
+    status.className='notice warning';
+  }
+});
+
+window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; document.getElementById('installBtn').style.display='block'; });
+document.getElementById('installBtn').addEventListener('click', async ()=>{
+  if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; }
+  else alert('Use your browser menu and choose Add to Home Screen or Install App.');
+});
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+calculate(); loadSettings(); loadRecords();
+</script>
+</body>
+</html>
